@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FACE Metrics
 
 Plataforma de gestão de métricas do FACE — Centro de Empreendedorismo da UniFacens.
@@ -73,3 +74,6 @@ face_metrics/
     ├── admin.py
     └── management/commands/seed_programas.py
 ```
+=======
+# FACE_Metrics
+>>>>>>> 80fb7a0fe06e9f2a0b34386884ea96bafe8824b1
