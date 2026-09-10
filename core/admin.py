@@ -86,10 +86,11 @@ class ProjetoParticipanteInline(admin.TabularInline):
 
 @admin.register(Projeto)
 class ProjetoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "area", "estagio")
-    list_filter = ("estagio", "area", "edicoes__programa")
+    list_display = ("nome", "area", "estagio", "empresa_parceira")
+    list_filter = ("estagio", "area", "edicoes__programa", "empresa_parceira")
     search_fields = ("nome",)
     filter_horizontal = ("edicoes",)
+    autocomplete_fields = ("empresa_parceira",)
     inlines = [ProjetoParticipanteInline]
 
 

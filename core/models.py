@@ -174,6 +174,7 @@ class Pessoa(TimeStampedModel):
         blank=True, null=True, unique=True,
         help_text="Somente números. Campo sensível — tratar com cuidado (LGPD).",
     )
+    rg = models.CharField(max_length=20, blank=True, help_text="Campo sensível — tratar com cuidado (LGPD).")
     email = models.EmailField(blank=True)
     telefone = models.CharField(max_length=20, blank=True)
     tipo_pessoa = models.CharField(max_length=25, choices=TIPO_CHOICES)
@@ -260,6 +261,10 @@ class Projeto(TimeStampedModel):
     area = models.CharField(max_length=100, blank=True, help_text="Ex.: Saúde, Educação, Fintech...")
     estagio = models.CharField(max_length=20, choices=ESTAGIO_CHOICES, default="ideacao")
     edicoes = models.ManyToManyField(Edicao, blank=True, related_name="projetos")
+    empresa_parceira = models.ForeignKey(
+        Parceiro, on_delete=models.SET_NULL, null=True, blank=True, related_name="desafios_propostos",
+        help_text="Preencher quando o projeto for um desafio proposto por uma empresa parceira (ex.: TCC Connect).",
+    )
 
     class Meta:
         ordering = ["nome"]

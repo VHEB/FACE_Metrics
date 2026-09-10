@@ -90,6 +90,17 @@ PROGRAMAS = [
         ),
         "parceiros": ["SEBRAE"],
     },
+    {
+        "nome": "Ideação Wadhwani",
+        "slug": "ideacao-wadhwani",
+        "tipo": "ideacao",
+        "descricao": (
+            "Programa de ideação em parceria com a Wadhwani Foundation. "
+            "A entrada costuma ocorrer via mentoria de diagnóstico inicial, "
+            "que faz a triagem dos participantes."
+        ),
+        "parceiros": ["Wadhwani Foundation"],
+    },
 ]
 
 
