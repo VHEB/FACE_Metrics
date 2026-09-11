@@ -10,7 +10,9 @@ from .models import (
     Projeto,
     ProjetoParticipante,
     Mentoria,
+    Entrega,
     Evento,
+    EventoParticipante,
 )
 
 
@@ -86,8 +88,8 @@ class ProjetoParticipanteInline(admin.TabularInline):
 
 @admin.register(Projeto)
 class ProjetoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "area", "estagio", "empresa_parceira")
-    list_filter = ("estagio", "area", "edicoes__programa", "empresa_parceira")
+    list_display = ("nome", "categoria", "area", "estagio", "empresa_parceira")
+    list_filter = ("categoria", "estagio", "area", "edicoes__programa", "empresa_parceira")
     search_fields = ("nome",)
     filter_horizontal = ("edicoes",)
     autocomplete_fields = ("empresa_parceira",)
@@ -96,15 +98,37 @@ class ProjetoAdmin(admin.ModelAdmin):
 
 @admin.register(Mentoria)
 class MentoriaAdmin(admin.ModelAdmin):
-    list_display = ("mentor", "data", "edicao", "projeto", "duracao_minutos")
-    list_filter = ("edicao__programa", "edicao__ano")
+    list_display = ("mentor", "tipo", "data", "edicao", "projeto", "duracao_minutos")
+    list_filter = ("tipo", "edicao__programa", "edicao__ano")
     autocomplete_fields = ("mentor", "mentorados", "projeto", "edicao")
     date_hierarchy = "data"
 
 
+@admin.register(Entrega)
+class EntregaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "participacao", "tipo", "status", "data_entrega")
+    list_filter = ("tipo", "status")
+    search_fields = ("nome", "participacao__pessoa__nome")
+    autocomplete_fields = ("participacao", "projeto")
+
+
+class EventoParticipanteInline(admin.TabularInline):
+    model = EventoParticipante
+    extra = 0
+    autocomplete_fields = ("pessoa",)
+
+
 @admin.register(Evento)
 class EventoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "tipo", "data", "parceiro", "edicao")
+    list_display = ("nome", "tipo", "data", "parceiro", "edicao", "total_inscritos", "total_presentes")
     list_filter = ("tipo", "parceiro", "edicao__programa")
     date_hierarchy = "data"
-    filter_horizontal = ("participantes",)
+    inlines = [EventoParticipanteInline]
+
+    @admin.display(description="Inscritos")
+    def total_inscritos(self, obj):
+        return obj.inscricoes.count()
+
+    @admin.display(description="Presentes")
+    def total_presentes(self, obj):
+        return obj.inscricoes.filter(presente=True).count()

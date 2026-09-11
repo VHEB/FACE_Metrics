@@ -23,7 +23,7 @@ import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Curso, Evento
+from core.models import Curso, Evento, EventoParticipante
 from core.management.commands._importer_utils import (
     RelatorioImportacao,
     buscar_ou_criar_pessoa,
@@ -154,7 +154,7 @@ class Command(BaseCommand):
                     "ra": linha.get(col_ra) if col_ra else None,
                 }
                 pessoa = buscar_ou_criar_pessoa(dados_pessoa, relatorio, curso=curso)
-                evento.participantes.add(pessoa)
+                EventoParticipante.objects.get_or_create(evento=evento, pessoa=pessoa)
 
                 if col_duvidas:
                     duvida = normalizar_texto(linha.get(col_duvidas))

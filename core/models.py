@@ -256,9 +256,21 @@ class Projeto(TimeStampedModel):
         ("encerrado", "Encerrado"),
     ]
 
+    CATEGORIA_CHOICES = [
+        ("startup_digital", "Startup Digital"),
+        ("startup_cientifica", "Startup Científica/DeepTech"),
+        ("negocio_impacto", "Negócio de Impacto Social"),
+        ("extensao_academica", "Extensão/Aplicação Acadêmica (ex.: TCC Connect)"),
+        ("outro", "Outro"),
+    ]
+
     nome = models.CharField(max_length=200)
     descricao = models.TextField(blank=True)
     area = models.CharField(max_length=100, blank=True, help_text="Ex.: Saúde, Educação, Fintech...")
+    categoria = models.CharField(
+        max_length=30, choices=CATEGORIA_CHOICES, blank=True,
+        help_text="Usado para filtros/dashboards. Lista fácil de ajustar depois.",
+    )
     estagio = models.CharField(max_length=20, choices=ESTAGIO_CHOICES, default="ideacao")
     edicoes = models.ManyToManyField(Edicao, blank=True, related_name="projetos")
     empresa_parceira = models.ForeignKey(
@@ -303,11 +315,18 @@ class ProjetoParticipante(TimeStampedModel):
 class Mentoria(TimeStampedModel):
     """Registro de uma sessão de mentoria."""
 
+    TIPO_CHOICES = [
+        ("diagnostico", "Diagnóstico (triagem inicial)"),
+        ("acompanhamento", "Acompanhamento"),
+        ("outro", "Outro"),
+    ]
+
     mentor = models.ForeignKey(
         Pessoa, on_delete=models.PROTECT, related_name="mentorias_realizadas",
         limit_choices_to={"tipo_pessoa__in": ["mentor_parceiro", "docente", "colaborador"]},
     )
     mentorados = models.ManyToManyField(Pessoa, related_name="mentorias_recebidas")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="acompanhamento")
     edicao = models.ForeignKey(
         Edicao, on_delete=models.SET_NULL, null=True, blank=True, related_name="mentorias",
     )
@@ -326,6 +345,48 @@ class Mentoria(TimeStampedModel):
 
     def __str__(self):
         return f"Mentoria de {self.mentor.nome} em {self.data:%d/%m/%Y}"
+
+
+class Entrega(TimeStampedModel):
+    """
+    Um checkpoint/entrega esperado de um participante dentro de uma Edição
+    (ex.: vídeo pitch 1, vídeo pitch 2, TCC final, pitch deck, MVP demo).
+    Genérico o suficiente pra ser reaproveitado por outros programas além
+    do TCC Connect.
+    """
+
+    TIPO_CHOICES = [
+        ("video", "Vídeo"),
+        ("documento", "Documento"),
+        ("apresentacao", "Apresentação"),
+        ("outro", "Outro"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pendente", "Pendente"),
+        ("entregue", "Entregue"),
+        ("atrasado", "Atrasado"),
+        ("dispensado", "Dispensado"),
+    ]
+
+    participacao = models.ForeignKey(Participacao, on_delete=models.CASCADE, related_name="entregas")
+    projeto = models.ForeignKey(
+        Projeto, on_delete=models.SET_NULL, null=True, blank=True, related_name="entregas",
+    )
+    nome = models.CharField(max_length=150, help_text='Ex.: "Vídeo Pitch 1", "TCC Final"')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="outro")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="entregue")
+    link = models.URLField(blank=True, help_text="Link do vídeo/documento, se houver.")
+    data_prevista = models.DateField(null=True, blank=True)
+    data_entrega = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-data_entrega"]
+        verbose_name = "Entrega"
+        verbose_name_plural = "Entregas"
+
+    def __str__(self):
+        return f"{self.nome} - {self.participacao.pessoa.nome}"
 
 
 class Evento(TimeStampedModel):
@@ -349,7 +410,9 @@ class Evento(TimeStampedModel):
     edicao = models.ForeignKey(
         Edicao, on_delete=models.SET_NULL, null=True, blank=True, related_name="eventos",
     )
-    participantes = models.ManyToManyField(Pessoa, blank=True, related_name="eventos")
+    participantes = models.ManyToManyField(
+        Pessoa, blank=True, related_name="eventos", through="EventoParticipante",
+    )
 
     class Meta:
         ordering = ["-data"]
@@ -358,3 +421,25 @@ class Evento(TimeStampedModel):
 
     def __str__(self):
         return f"{self.nome} ({self.data:%d/%m/%Y})"
+
+
+class EventoParticipante(TimeStampedModel):
+    """
+    Inscrição de uma Pessoa num Evento, com controle de presença separado
+    da inscrição — útil pra medir taxa de comparecimento real por evento.
+    """
+
+    evento = models.ForeignKey(Evento, on_delete=models.CASCADE, related_name="inscricoes")
+    pessoa = models.ForeignKey(Pessoa, on_delete=models.CASCADE, related_name="inscricoes_eventos")
+    presente = models.BooleanField(
+        null=True, blank=True,
+        help_text="Deixe em branco até confirmar. True = compareceu, False = não compareceu.",
+    )
+
+    class Meta:
+        unique_together = ("evento", "pessoa")
+        verbose_name = "Inscrição em evento"
+        verbose_name_plural = "Inscrições em eventos"
+
+    def __str__(self):
+        return f"{self.pessoa.nome} - {self.evento.nome}"
