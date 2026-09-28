@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # apps do projeto
     "core",
+    "dashboard",
     # de-para pra fase 2 (API): descomentar quando for abrir para o público
     # "rest_framework",
 ]

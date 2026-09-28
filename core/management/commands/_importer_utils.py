@@ -17,6 +17,8 @@ tente registrá-lo como comando.
 import re
 import unicodedata
 
+import pandas as pd
+
 from core.models import Pessoa
 
 
@@ -92,6 +94,90 @@ class RelatorioImportacao:
                 w(f"   - {aviso}")
 
 
+def truncar_texto(valor, tamanho, relatorio=None, contexto=""):
+    """Versão genérica de truncar_para_campo, pra usar em qualquer CharField (não só Pessoa)."""
+    if not valor or len(valor) <= tamanho:
+        return valor
+    if relatorio is not None:
+        relatorio.aviso(
+            f"Valor de {contexto or 'um campo'} excedia {tamanho} caracteres e foi cortado: "
+            f"\"{valor}\" -> \"{valor[:tamanho]}\""
+        )
+    return valor[:tamanho]
+
+
+def truncar_para_campo(nome_campo, valor, relatorio=None, contexto=""):
+    """Corta o valor pro max_length real do campo no model Pessoa, avisando se precisou cortar."""
+    if not valor:
+        return valor
+    max_len = Pessoa._meta.get_field(nome_campo).max_length
+    if max_len and len(valor) > max_len:
+        if relatorio is not None:
+            relatorio.aviso(
+                f"Campo '{nome_campo}' de {contexto or 'um registro'} excedia {max_len} caracteres "
+                f"e foi cortado: \"{valor}\" -> \"{valor[:max_len]}\""
+            )
+        return valor[:max_len]
+    return valor
+
+
+def carregar_aba_com_cabecalho_flexivel(caminho_arquivo, nome_aba):
+    """
+    Lê uma aba detectando automaticamente onde está o cabeçalho, em vez de
+    assumir uma posição fixa (header=N). Lida com dois formatos vistos na
+    prática:
+        - cabeçalho numa linha só (ex.: planilha de 2026)
+        - cabeçalho em duas linhas, com uma linha "pai" (ex.: "DATAS") que
+          se divide em sub-colunas na linha seguinte (ex.: "SOLICITAÇÃO" /
+          "REALIZAÇÃO"), como na planilha de 2024/2025.
+    """
+    bruto = pd.read_excel(caminho_arquivo, sheet_name=nome_aba, header=None)
+
+    linha_cabecalho = None
+    for i in range(min(10, len(bruto))):
+        valores = {chave_comparacao(v) for v in bruto.iloc[i] if pd.notna(v)}
+        if any("nome" in v for v in valores):
+            linha_cabecalho = i
+            break
+    if linha_cabecalho is None:
+        raise ValueError(f"Não encontrei uma linha de cabeçalho com 'Nome' na aba '{nome_aba}'.")
+
+    cabecalho = bruto.iloc[linha_cabecalho]
+    proxima = bruto.iloc[linha_cabecalho + 1] if linha_cabecalho + 1 < len(bruto) else None
+
+    tem_subcabecalho = False
+    if proxima is not None:
+        total_colunas = bruto.shape[1]
+        preenchidas_proxima = [j for j in range(total_colunas) if pd.notna(proxima[j])]
+        preenche_lacuna = sum(1 for j in preenchidas_proxima if pd.isna(cabecalho[j]))
+        sobrepoe_rotulo = sum(1 for j in preenchidas_proxima if pd.notna(cabecalho[j]))
+        # Só tratamos como sub-cabeçalho (não como primeira linha de dados de
+        # verdade) quando a linha de baixo preenche principalmente lacunas
+        # do cabeçalho (rótulo "pai" mesclado, tipo "DATAS" -> "SOLICITAÇÃO"/
+        # "REALIZAÇÃO") e cobre só uma minoria das colunas — uma linha de
+        # dados real, mesmo esparsa, tende a sobrepor rótulos já existentes
+        # (ex.: a própria coluna "Nome" sempre vem preenchida).
+        if preenchidas_proxima and len(preenchidas_proxima) < total_colunas * 0.5 and preenche_lacuna >= sobrepoe_rotulo:
+            tem_subcabecalho = True
+
+    colunas = []
+    sub = proxima if tem_subcabecalho else None
+    for j in range(bruto.shape[1]):
+        valor_sub = sub[j] if sub is not None else None
+        valor_principal = cabecalho[j]
+        if pd.notna(valor_sub):
+            colunas.append(normalizar_texto(valor_sub))
+        elif pd.notna(valor_principal):
+            colunas.append(normalizar_texto(valor_principal))
+        else:
+            colunas.append(f"coluna_{j}")
+
+    inicio_dados = linha_cabecalho + (2 if tem_subcabecalho else 1)
+    dados = bruto.iloc[inicio_dados:].reset_index(drop=True)
+    dados.columns = colunas
+    return dados
+
+
 def buscar_ou_criar_pessoa(dados, relatorio, curso=None):
     """
     dados: dict com chaves possíveis: nome, cpf, rg, email, telefone,
@@ -140,10 +226,12 @@ def buscar_ou_criar_pessoa(dados, relatorio, curso=None):
             pessoa.email = email
             mudou = True
         if not pessoa.telefone and dados.get("telefone"):
-            pessoa.telefone = normalizar_texto(dados.get("telefone"))
+            pessoa.telefone = truncar_para_campo(
+                "telefone", normalizar_texto(dados.get("telefone")), relatorio, nome
+            )
             mudou = True
         if not pessoa.ra and dados.get("ra"):
-            pessoa.ra = normalizar_texto(dados.get("ra"))
+            pessoa.ra = truncar_para_campo("ra", normalizar_texto(dados.get("ra")), relatorio, nome)
             mudou = True
         if curso is not None and pessoa.curso is None:
             pessoa.curso = curso
@@ -155,14 +243,16 @@ def buscar_ou_criar_pessoa(dados, relatorio, curso=None):
     pessoa = Pessoa(
         nome=nome,
         cpf=cpf,
-        rg=rg or "",
+        rg=truncar_para_campo("rg", rg or "", relatorio, nome),
         email=email,
-        telefone=normalizar_texto(dados.get("telefone")),
+        telefone=truncar_para_campo("telefone", normalizar_texto(dados.get("telefone")), relatorio, nome),
         tipo_pessoa=dados.get("tipo_pessoa") or "comunidade_externa",
         curso=curso,
-        ra=normalizar_texto(dados.get("ra")),
-        cidade=normalizar_texto(dados.get("cidade")),
-        semestre_ingresso=normalizar_texto(dados.get("semestre_ingresso")),
+        ra=truncar_para_campo("ra", normalizar_texto(dados.get("ra")), relatorio, nome),
+        cidade=truncar_para_campo("cidade", normalizar_texto(dados.get("cidade")), relatorio, nome),
+        semestre_ingresso=truncar_para_campo(
+            "semestre_ingresso", normalizar_texto(dados.get("semestre_ingresso")), relatorio, nome
+        ),
     )
     pessoa.save()
     relatorio.pessoa_criada()

@@ -322,8 +322,9 @@ class Mentoria(TimeStampedModel):
     ]
 
     mentor = models.ForeignKey(
-        Pessoa, on_delete=models.PROTECT, related_name="mentorias_realizadas",
+        Pessoa, on_delete=models.SET_NULL, null=True, blank=True, related_name="mentorias_realizadas",
         limit_choices_to={"tipo_pessoa__in": ["mentor_parceiro", "docente", "colaborador"]},
+        help_text="Deixe em branco quando o mentor não estiver identificado no registro histórico.",
     )
     mentorados = models.ManyToManyField(Pessoa, related_name="mentorias_recebidas")
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="acompanhamento")

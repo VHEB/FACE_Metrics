@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FACE — Dashboard de Métricas</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        body { background-color: #f5f6fa; }
+        .kpi-card { border: none; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .kpi-value { font-size: 2rem; font-weight: 700; }
+        .kpi-label { color: #6c757d; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .chart-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 1.25rem; margin-bottom: 1.5rem; }
+        .chart-title { font-weight: 600; margin-bottom: 1rem; }
+        canvas { max-height: 320px; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">FACE — Dashboard de Métricas</span>
+        <a href="/admin/" class="btn btn-outline-light btn-sm">Ir para o Admin</a>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 pb-5">
+
+    <form method="get" class="row g-2 align-items-center mb-4">
+        <div class="col-auto">
+            <label class="col-form-label">Ano:</label>
+        </div>
+        <div class="col-auto">
+            <select name="ano" class="form-select" onchange="this.form.submit()">
+                <option value="">Todos os anos</option>
+                {% for ano in anos_disponiveis %}
+                    <option value="{{ ano }}" {% if ano == ano_filtro %}selected{% endif %}>{{ ano }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if ano_filtro %}
+        <div class="col-auto">
+            <a href="{% url 'dashboard:home' %}" class="btn btn-link btn-sm">Limpar filtro</a>
+        </div>
+        {% endif %}
+    </form>
+
+    <div class="row g-3 mb-2">
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ total_pessoas }}</div>
+                <div class="kpi-label">Pessoas cadastradas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ total_participacoes }}</div>
+                <div class="kpi-label">Participações{% if ano_filtro %} em {{ ano_filtro }}{% endif %}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ total_projetos }}</div>
+                <div class="kpi-label">Projetos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ total_mentorias }}</div>
+                <div class="kpi-label">Mentorias{% if ano_filtro %} em {{ ano_filtro }}{% endif %}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ total_eventos }}</div>
+                <div class="kpi-label">Eventos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card p-3 text-center">
+                <div class="kpi-value">{{ taxa_presenca }}%</div>
+                <div class="kpi-label">Presença em eventos ({{ total_presentes_evento }}/{{ total_inscricoes_evento }})</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <div class="chart-title">Participantes por Programa</div>
+                <canvas id="chartPrograma"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <div class="chart-title">Top 10 Cursos com mais participantes</div>
+                <canvas id="chartCurso"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <div class="chart-title">Pessoas por tipo de vínculo</div>
+                <canvas id="chartTipo"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <div class="chart-title">Projetos por categoria</div>
+                <canvas id="chartCategoria"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <div class="chart-title">Projetos por estágio</div>
+                <canvas id="chartEstagio"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="chart-card">
+                <div class="chart-title">Mentorias por ano — Diagnóstico vs. Acompanhamento</div>
+                <canvas id="chartMentorias"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const paleta = ['#4e73df', '#1cc88a', '#f6c23e', '#e74a3b', '#36b9cc', '#858796', '#fd7e14', '#6f42c1', '#20c9a6', '#5a5c69'];
+
+function corDe(i) { return paleta[i % paleta.length]; }
+
+const dadosPrograma = {{ grafico_programa_json|safe }};
+new Chart(document.getElementById('chartPrograma'), {
+    type: 'bar',
+    data: {
+        labels: dadosPrograma.labels,
+        datasets: [{ label: 'Participantes', data: dadosPrograma.valores, backgroundColor: dadosPrograma.labels.map((_, i) => corDe(i)) }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+});
+
+const dadosCurso = {{ grafico_curso_json|safe }};
+new Chart(document.getElementById('chartCurso'), {
+    type: 'bar',
+    data: {
+        labels: dadosCurso.labels,
+        datasets: [{ label: 'Participantes', data: dadosCurso.valores, backgroundColor: dadosCurso.labels.map((_, i) => corDe(i)) }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+});
+
+const dadosTipo = {{ grafico_tipo_json|safe }};
+new Chart(document.getElementById('chartTipo'), {
+    type: 'doughnut',
+    data: { labels: dadosTipo.labels, datasets: [{ data: dadosTipo.valores, backgroundColor: dadosTipo.labels.map((_, i) => corDe(i)) }] },
+});
+
+const dadosCategoria = {{ grafico_categoria_json|safe }};
+new Chart(document.getElementById('chartCategoria'), {
+    type: 'doughnut',
+    data: { labels: dadosCategoria.labels, datasets: [{ data: dadosCategoria.valores, backgroundColor: dadosCategoria.labels.map((_, i) => corDe(i)) }] },
+});
+
+const dadosEstagio = {{ grafico_estagio_json|safe }};
+new Chart(document.getElementById('chartEstagio'), {
+    type: 'bar',
+    data: { labels: dadosEstagio.labels, datasets: [{ label: 'Projetos', data: dadosEstagio.valores, backgroundColor: corDe(2) }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+});
+
+const dadosMentorias = {{ grafico_mentorias_json|safe }};
+new Chart(document.getElementById('chartMentorias'), {
+    type: 'bar',
+    data: {
+        labels: dadosMentorias.labels,
+        datasets: [
+            { label: 'Diagnóstico', data: dadosMentorias.diagnostico, backgroundColor: corDe(0) },
+            { label: 'Acompanhamento', data: dadosMentorias.acompanhamento, backgroundColor: corDe(1) },
+        ]
+    },
+    options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+});
+</script>
+</body>
+</html>

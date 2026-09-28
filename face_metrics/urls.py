@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.urls import path
 
+from django.urls import path, include
+
 urlpatterns = [
     path("admin/", admin.site.urls),
-    # path("api/", include("core.api_urls")),  # descomentar na Fase 2 (DRF)
+    path("dashboard/", include("dashboard.urls")),
 ]
