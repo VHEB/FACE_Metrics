@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block titulo %}Mentoria — Portal FACE{% endblock %}
+{% block conteudo %}
+<div class="card p-4">
+    <h4 class="mb-1">Mentoria de {{ mentoria.get_tipo_display }}</h4>
+    <div class="text-muted mb-3">{{ mentoria.data|date:"d/m/Y" }} · {{ mentoria.duracao_minutos }} min{% if mentoria.edicao %} · {{ mentoria.edicao }}{% endif %}</div>
+
+    <dl class="row">
+        <dt class="col-sm-3">Mentorado(s)</dt>
+        <dd class="col-sm-9">
+            {% for pessoa in mentoria.mentorados.all %}
+                <a href="{% url 'portal:pessoa_detail' pessoa.pk %}">{{ pessoa.nome }}</a>{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+        </dd>
+
+        <dt class="col-sm-3">Projeto</dt>
+        <dd class="col-sm-9">
+            {% if mentoria.projeto %}<a href="{% url 'portal:projeto_detail' mentoria.projeto.pk %}">{{ mentoria.projeto.nome }}</a>{% else %}—{% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Tema</dt>
+        <dd class="col-sm-9">{{ mentoria.tema|default:"—" }}</dd>
+
+        <dt class="col-sm-3">Observações</dt>
+        <dd class="col-sm-9" style="white-space: pre-line;">{{ mentoria.observacoes|default:"—" }}</dd>
+    </dl>
+    <a href="{% url 'portal:mentoria_list' %}" class="btn btn-link px-0">← Voltar</a>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "portal/base.html" %}
+{% block titulo %}{{ projeto.nome }} — Portal FACE{% endblock %}
+{% block conteudo %}
+<div class="card p-4 mb-3">
+    <h4 class="mb-1">{{ projeto.nome }}</h4>
+    <div class="text-muted mb-2">
+        {{ projeto.get_categoria_display|default:"Não classificado" }} · {{ projeto.get_estagio_display }}
+        {% if projeto.empresa_parceira %} · Parceiro: {{ projeto.empresa_parceira }}{% endif %}
+    </div>
+    {% if projeto.descricao %}<p style="white-space: pre-line;">{{ projeto.descricao }}</p>{% endif %}
+    <div class="text-muted small">
+        Edições: {% for e in edicoes %}{{ e }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+    </div>
+</div>
+
+<div class="card p-3">
+    <h6>Integrantes</h6>
+    {% for integrante in integrantes %}
+        <div class="border-bottom py-1">
+            <a href="{% url 'portal:pessoa_detail' integrante.pessoa.pk %}">{{ integrante.pessoa.nome }}</a>
+            <span class="badge bg-light text-dark">{{ integrante.get_papel_display }}</span>
+        </div>
+    {% empty %}
+        <div class="text-muted small">Nenhum integrante cadastrado.</div>
+    {% endfor %}
+</div>
+<a href="{% url 'portal:projeto_list' %}" class="btn btn-link px-0 mt-3">← Voltar</a>
+{% endblock %}

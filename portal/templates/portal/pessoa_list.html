@@ -1,0 +1,42 @@
+{% extends "portal/base.html" %}
+{% block titulo %}Pessoas — Portal FACE{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Pessoas</h4>
+    <a href="{% url 'portal:pessoa_create' %}" class="btn btn-primary">+ Nova pessoa</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-6">{{ form.q }}</div>
+    <div class="col-md-4">{{ form.tipo_pessoa }}</div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-primary w-100">Buscar</button></div>
+</form>
+
+<div class="card p-0">
+    <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Nome</th>
+                <th>Vínculo</th>
+                <th>Curso</th>
+                <th>E-mail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pessoa in pessoas %}
+            <tr style="cursor: pointer;" onclick="window.location='{% url 'portal:pessoa_detail' pessoa.pk %}'">
+                <td>{{ pessoa.nome }}</td>
+                <td>{{ pessoa.get_tipo_pessoa_display }}</td>
+                <td>{{ pessoa.curso|default:"—" }}</td>
+                <td>{{ pessoa.email|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-4">Nenhuma pessoa encontrada.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if pessoas|length == 200 %}
+<div class="form-text mt-2">Mostrando os primeiros 200 resultados — use a busca pra refinar.</div>
+{% endif %}
+{% endblock %}

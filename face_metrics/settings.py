@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     # apps do projeto
     "core",
     "dashboard",
+    "portal",
     # de-para pra fase 2 (API): descomentar quando for abrir para o público
     # "rest_framework",
 ]
@@ -107,3 +108,6 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # Log de auditoria simples via admin (django.contrib.admin já registra
 # LogEntry de tudo que é criado/editado/apagado pelo admin).
+LOGIN_URL = "portal:login"
+LOGIN_REDIRECT_URL = "portal:home"
+LOGOUT_REDIRECT_URL = "portal:login"

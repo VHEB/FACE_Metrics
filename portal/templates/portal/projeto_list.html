@@ -1,0 +1,37 @@
+{% extends "portal/base.html" %}
+{% block titulo %}Projetos — Portal FACE{% endblock %}
+{% block conteudo %}
+<h4 class="mb-3">Projetos</h4>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-5">{{ form.q }}</div>
+    <div class="col-md-3">{{ form.categoria }}</div>
+    <div class="col-md-2">{{ form.estagio }}</div>
+    <div class="col-md-2"><button type="submit" class="btn btn-outline-primary w-100">Buscar</button></div>
+</form>
+
+<div class="card p-0">
+    <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Estágio</th>
+                <th>Empresa parceira</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for projeto in projetos %}
+            <tr style="cursor: pointer;" onclick="window.location='{% url 'portal:projeto_detail' projeto.pk %}'">
+                <td>{{ projeto.nome }}</td>
+                <td>{{ projeto.get_categoria_display|default:"Não classificado" }}</td>
+                <td>{{ projeto.get_estagio_display }}</td>
+                <td>{{ projeto.empresa_parceira|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-4">Nenhum projeto encontrado.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
