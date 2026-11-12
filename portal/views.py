@@ -12,8 +12,9 @@ from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
-from core.models import Evento, EventoParticipante, Mentoria, Participacao, Pessoa, Projeto
-from .forms import EventoForm, MentoriaForm, PessoaBuscaForm, PessoaQuickForm, ProjetoBuscaForm
+from core.models import Evento, EventoParticipante, Mentoria, Participacao, PedidoMentoria, Pessoa, Projeto
+from .forms import (EventoForm, MentoriaForm, PedidoAtendimentoForm, PedidoBuscaForm, PessoaBuscaForm,
+                    PessoaQuickForm, ProjetoBuscaForm)
 
 
 @login_required
@@ -86,12 +87,14 @@ def evento_detail(request, pk):
 
 @login_required
 def mentoria_list(request):
-    mentorias = Mentoria.objects.select_related("edicao", "edicao__programa", "projeto").prefetch_related("mentorados").order_by("-data")
+    mentorias = (Mentoria.objects.select_related("edicao", "edicao__programa", "projeto", "pedido", "mentor")
+                 .prefetch_related("mentorados").order_by("-data"))
     return render(request, "portal/mentoria_list.html", {"mentorias": mentorias})
 
 
 @login_required
 def mentoria_create(request):
+    pedido_inicial = request.GET.get("pedido")
     if request.method == "POST":
         form = MentoriaForm(request.POST)
         if form.is_valid():
@@ -99,16 +102,63 @@ def mentoria_create(request):
             messages.success(request, "Mentoria registrada com sucesso.")
             return redirect("portal:mentoria_detail", pk=mentoria.pk)
     else:
-        form = MentoriaForm()
+        inicial = {}
+        if pedido_inicial and pedido_inicial.isdigit():
+            pedido = PedidoMentoria.objects.filter(pk=pedido_inicial).first()
+            if pedido:
+                inicial = {"pedido": pedido, "projeto": pedido.projeto, "mentorados": [pedido.pessoa],
+                           "tipo": "acompanhamento" if pedido.sessoes.exists() else "diagnostico"}
+        form = MentoriaForm(initial=inicial)
     return render(request, "portal/mentoria_form.html", {"form": form, "titulo": "Registrar mentoria"})
 
 
 @login_required
 def mentoria_detail(request, pk):
     mentoria = get_object_or_404(
-        Mentoria.objects.select_related("edicao", "edicao__programa", "projeto").prefetch_related("mentorados"), pk=pk,
+        Mentoria.objects.select_related("edicao", "edicao__programa", "projeto", "pedido", "mentor")
+        .prefetch_related("mentorados"), pk=pk,
     )
     return render(request, "portal/mentoria_detail.html", {"mentoria": mentoria})
+
+
+# ---------------------------------------------------------------------------
+# Pedidos de mentoria
+# ---------------------------------------------------------------------------
+
+@login_required
+def pedido_list(request):
+    form = PedidoBuscaForm(request.GET or None)
+    pedidos = PedidoMentoria.objects.select_related("pessoa", "projeto", "responsavel").order_by("-data_pedido", "-ano")
+    if form.is_valid():
+        termo = form.cleaned_data.get("q")
+        if termo:
+            pedidos = pedidos.filter(Q(pessoa__nome__icontains=termo) | Q(projeto__nome__icontains=termo)
+                                     | Q(nome_projeto_informado__icontains=termo) | Q(tematica__icontains=termo))
+        for campo in ("status", "origem", "ano"):
+            valor = form.cleaned_data.get(campo)
+            if valor:
+                pedidos = pedidos.filter(**{campo: valor})
+    total = pedidos.count()
+    return render(request, "portal/pedido_list.html", {"form": form, "pedidos": pedidos[:300], "total": total})
+
+
+@login_required
+def pedido_detail(request, pk):
+    pedido = get_object_or_404(
+        PedidoMentoria.objects.select_related("pessoa", "projeto", "curso_no_pedido", "responsavel"), pk=pk)
+    if request.method == "POST":
+        form = PedidoAtendimentoForm(request.POST, instance=pedido)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Pedido atualizado.")
+            return redirect("portal:pedido_detail", pk=pedido.pk)
+    else:
+        form = PedidoAtendimentoForm(instance=pedido)
+    sessoes = pedido.sessoes.select_related("mentor").order_by("data")
+    outros = pedido.pessoa.pedidos_mentoria.exclude(pk=pedido.pk).order_by("-data_pedido")
+    return render(request, "portal/pedido_detail.html", {
+        "pedido": pedido, "form": form, "sessoes": sessoes, "outros_pedidos": outros,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -158,10 +208,11 @@ def pessoa_detail(request, pk):
     mentorias = pessoa.mentorias_recebidas.select_related("edicao", "edicao__programa").order_by("-data")
     projetos = Projeto.objects.filter(integrantes__pessoa=pessoa).distinct()
     eventos = EventoParticipante.objects.filter(pessoa=pessoa).select_related("evento").order_by("-evento__data")
+    pedidos = pessoa.pedidos_mentoria.select_related("projeto").order_by("-data_pedido")
 
     return render(request, "portal/pessoa_detail.html", {
         "pessoa": pessoa, "participacoes": participacoes, "mentorias": mentorias,
-        "projetos": projetos, "eventos": eventos,
+        "projetos": projetos, "eventos": eventos, "pedidos": pedidos,
     })
 
 
@@ -194,6 +245,8 @@ def projeto_detail(request, pk):
     projeto = get_object_or_404(Projeto.objects.select_related("empresa_parceira"), pk=pk)
     integrantes = projeto.integrantes.select_related("pessoa").order_by("pessoa__nome")
     edicoes = projeto.edicoes.select_related("programa").order_by("-ano")
+    pedidos = projeto.pedidos_mentoria.select_related("pessoa").order_by("-data_pedido")
+    sessoes = projeto.mentorias.prefetch_related("mentorados").order_by("-data")
     return render(request, "portal/projeto_detail.html", {
-        "projeto": projeto, "integrantes": integrantes, "edicoes": edicoes,
+        "projeto": projeto, "integrantes": integrantes, "edicoes": edicoes, "pedidos": pedidos, "sessoes": sessoes,
     })

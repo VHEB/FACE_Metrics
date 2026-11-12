@@ -3,7 +3,7 @@
 {% block conteudo %}
 <div class="card p-4">
     <h4 class="mb-1">Mentoria de {{ mentoria.get_tipo_display }}</h4>
-    <div class="text-muted mb-3">{{ mentoria.data|date:"d/m/Y" }} · {{ mentoria.duracao_minutos }} min{% if mentoria.edicao %} · {{ mentoria.edicao }}{% endif %}</div>
+    <div class="text-muted mb-3">{{ mentoria.data|date:"d/m/Y"|default:"sem data" }}{% if mentoria.horario %} às {{ mentoria.horario|time:"H:i" }}{% endif %}{% if mentoria.duracao_minutos %} · {{ mentoria.duracao_minutos }} min{% endif %}{% if mentoria.edicao %} · {{ mentoria.edicao }}{% endif %}</div>
 
     <dl class="row">
         <dt class="col-sm-3">Mentorado(s)</dt>
@@ -18,8 +18,20 @@
             {% if mentoria.projeto %}<a href="{% url 'portal:projeto_detail' mentoria.projeto.pk %}">{{ mentoria.projeto.nome }}</a>{% else %}—{% endif %}
         </dd>
 
+        <dt class="col-sm-3">Pedido</dt>
+        <dd class="col-sm-9">{% if mentoria.pedido %}<a href="{% url 'portal:pedido_detail' mentoria.pedido.pk %}">{{ mentoria.pedido }}</a>{% else %}—{% endif %}</dd>
+
+        <dt class="col-sm-3">Conduzida por</dt>
+        <dd class="col-sm-9">{{ mentoria.mentor.nome|default:mentoria.responsavel|default:"—" }}{% if mentoria.area %} · {{ mentoria.area }}{% endif %}</dd>
+
         <dt class="col-sm-3">Tema</dt>
         <dd class="col-sm-9">{{ mentoria.tema|default:"—" }}</dd>
+
+        <dt class="col-sm-3">Orientação / próximos passos</dt>
+        <dd class="col-sm-9" style="white-space: pre-line;">{{ mentoria.orientacao|default:"—" }}</dd>
+
+        <dt class="col-sm-3">Encaminhamentos</dt>
+        <dd class="col-sm-9">{{ mentoria.encaminhamentos|default:"—" }}</dd>
 
         <dt class="col-sm-3">Observações</dt>
         <dd class="col-sm-9" style="white-space: pre-line;">{{ mentoria.observacoes|default:"—" }}</dd>

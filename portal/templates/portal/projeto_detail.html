@@ -4,10 +4,16 @@
 <div class="card p-4 mb-3">
     <h4 class="mb-1">{{ projeto.nome }}</h4>
     <div class="text-muted mb-2">
-        {{ projeto.get_categoria_display|default:"Não classificado" }} · {{ projeto.get_estagio_display }}
+        {{ projeto.get_categoria_display|default:"Não classificado" }} · {{ projeto.get_estagio_display }} · {{ projeto.get_status_display }}
+        {% if projeto.trl_atual %} · TRL {{ projeto.trl_atual }}{% if projeto.trl_inicial and projeto.trl_inicial != projeto.trl_atual %} (começou em {{ projeto.trl_inicial }}){% endif %}{% endif %}
         {% if projeto.empresa_parceira %} · Parceiro: {{ projeto.empresa_parceira }}{% endif %}
     </div>
+    {% if projeto.origens %}<div class="small text-muted mb-2">Origem: {{ projeto.origens }}</div>{% endif %}
     {% if projeto.descricao %}<p style="white-space: pre-line;">{{ projeto.descricao }}</p>{% endif %}
+    {% if projeto.desafio_atual %}<p class="mb-1"><strong>Desafio atual:</strong> {{ projeto.desafio_atual }}</p>{% endif %}
+    {% if projeto.ods %}<p class="mb-1"><strong>ODS:</strong> {{ projeto.ods }}</p>{% endif %}
+    {% if projeto.mentor_cientifico %}<p class="mb-1"><strong>Mentor científico:</strong> {{ projeto.mentor_cientifico }}</p>{% endif %}
+    {% if projeto.link_entrega %}<p class="mb-1"><a href="{{ projeto.link_entrega }}" target="_blank" rel="noopener">Link da entrega</a></p>{% endif %}
     <div class="text-muted small">
         Edições: {% for e in edicoes %}{{ e }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
     </div>
@@ -23,6 +29,30 @@
     {% empty %}
         <div class="text-muted small">Nenhum integrante cadastrado.</div>
     {% endfor %}
+</div>
+<div class="row g-3 mt-0">
+    <div class="col-md-6">
+        <div class="card p-3 h-100">
+            <h6>Pedidos de mentoria</h6>
+            {% for p in pedidos %}
+                <div class="border-bottom py-1">
+                    <a href="{% url 'portal:pedido_detail' p.pk %}">{{ p.data_pedido|date:"d/m/Y"|default:p.ano }}</a> · {{ p.pessoa.nome }}
+                    {% include "portal/_status_pedido.html" with pedido=p %}
+                </div>
+            {% empty %}<div class="text-muted small">Nenhum pedido.</div>{% endfor %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-3 h-100">
+            <h6>Sessões de mentoria</h6>
+            {% for s in sessoes %}
+                <div class="border-bottom py-1">
+                    <a href="{% url 'portal:mentoria_detail' s.pk %}">{{ s.data|date:"d/m/Y"|default:"sem data" }} — {{ s.get_tipo_display }}</a>
+                    {% if s.encaminhamentos %}<div class="small text-muted">{{ s.encaminhamentos }}</div>{% endif %}
+                </div>
+            {% empty %}<div class="text-muted small">Nenhuma sessão.</div>{% endfor %}
+        </div>
+    </div>
 </div>
 <a href="{% url 'portal:projeto_list' %}" class="btn btn-link px-0 mt-3">← Voltar</a>
 {% endblock %}

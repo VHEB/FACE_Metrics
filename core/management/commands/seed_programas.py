@@ -101,6 +101,16 @@ PROGRAMAS = [
         ),
         "parceiros": ["Wadhwani Foundation"],
     },
+    {
+        "nome": "PIEMP",
+        "slug": "piemp",
+        "tipo": "iniciacao",
+        "descricao": (
+            "Programa de Iniciação ao Empreendedorismo: bolsas para estudantes de graduação "
+            "desenvolverem projetos empreendedores, em 3 fases (seleção, capacitação e avaliação)."
+        ),
+        "parceiros": ["CNPq"],
+    },
 ]
 
 

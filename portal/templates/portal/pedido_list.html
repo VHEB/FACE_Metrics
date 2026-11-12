@@ -1,0 +1,36 @@
+{% extends "portal/base.html" %}
+{% block titulo %}Pedidos de mentoria — Portal FACE{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Pedidos de mentoria <span class="text-muted fs-6">({{ total }})</span></h4>
+</div>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">{{ form.q }}</div>
+    <div class="col-md-3">{{ form.status }}</div>
+    <div class="col-md-2">{{ form.origem }}</div>
+    <div class="col-md-2">{{ form.ano }}</div>
+    <div class="col-md-1"><button class="btn btn-primary w-100">Filtrar</button></div>
+</form>
+<div class="card p-0">
+    <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+            <tr><th>Data</th><th>Pessoa</th><th>Projeto / temática</th><th>Origem</th><th>Status</th><th>Sessões</th></tr>
+        </thead>
+        <tbody>
+        {% for p in pedidos %}
+            <tr style="cursor: pointer;" onclick="window.location='{% url 'portal:pedido_detail' p.pk %}'">
+                <td class="text-nowrap">{{ p.data_pedido|date:"d/m/Y"|default:p.ano }}</td>
+                <td>{{ p.pessoa.nome }}</td>
+                <td>{% if p.projeto %}<strong>{{ p.projeto.nome }}</strong>{% else %}<span class="text-muted">{{ p.tematica|truncatechars:70|default:"—" }}</span>{% endif %}</td>
+                <td>{{ p.get_origem_display }}{% if p.turma_extensao %}<div class="small text-muted">{{ p.turma_extensao }}</div>{% endif %}</td>
+                <td>{% include "portal/_status_pedido.html" with pedido=p %}</td>
+                <td>{{ p.sessoes.count }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if total > 300 %}<div class="text-muted small mt-2">Mostrando os 300 mais recentes. Use os filtros para refinar.</div>{% endif %}
+{% endblock %}

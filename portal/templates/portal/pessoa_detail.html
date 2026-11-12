@@ -12,6 +12,20 @@
         {% if pessoa.email %}<span class="me-3">✉️ {{ pessoa.email }}</span>{% endif %}
         {% if pessoa.telefone %}<span>📞 {{ pessoa.telefone }}</span>{% endif %}
     </div>
+    {% if pessoa.emails_alternativos %}<div class="small text-muted mt-1">Outros e-mails: {{ pessoa.emails_alternativos }}</div>{% endif %}
+</div>
+
+<div class="card p-3 mb-3">
+    <h6>Pedidos de mentoria</h6>
+    {% for p in pedidos %}
+        <div class="border-bottom py-1">
+            <a href="{% url 'portal:pedido_detail' p.pk %}">{{ p.data_pedido|date:"d/m/Y"|default:p.ano }} — {{ p.get_origem_display }}</a>
+            {% if p.projeto %}· {{ p.projeto.nome }}{% endif %}
+            {% include "portal/_status_pedido.html" with pedido=p %}
+        </div>
+    {% empty %}
+        <div class="text-muted small">Nenhum pedido de mentoria.</div>
+    {% endfor %}
 </div>
 
 <div class="row g-3">
@@ -30,10 +44,10 @@
     </div>
     <div class="col-md-6">
         <div class="card p-3 h-100">
-            <h6>Mentorias recebidas</h6>
+            <h6>Sessões de mentoria</h6>
             {% for m in mentorias %}
                 <div class="border-bottom py-1">
-                    <a href="{% url 'portal:mentoria_detail' m.pk %}">{{ m.data|date:"d/m/Y" }} — {{ m.get_tipo_display }}</a>
+                    <a href="{% url 'portal:mentoria_detail' m.pk %}">{{ m.data|date:"d/m/Y"|default:"sem data" }} — {{ m.get_tipo_display }}</a>
                 </div>
             {% empty %}
                 <div class="text-muted small">Nenhuma mentoria registrada.</div>
@@ -55,10 +69,11 @@
     </div>
     <div class="col-md-6">
         <div class="card p-3 h-100">
-            <h6>Eventos</h6>
+            <h6>Viagens e eventos</h6>
             {% for insc in eventos %}
                 <div class="border-bottom py-1">
                     <a href="{% url 'portal:evento_detail' insc.evento.pk %}">{{ insc.evento.nome }}</a>
+                    {% if insc.status != 'inscrito' %}<span class="badge bg-light text-dark">{{ insc.get_status_display }}</span>{% endif %}
                     {% if insc.presente == True %}<span class="badge bg-success">presente</span>
                     {% elif insc.presente == False %}<span class="badge bg-secondary">não compareceu</span>
                     {% else %}<span class="badge bg-light text-dark">não verificado</span>{% endif %}

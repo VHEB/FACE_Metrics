@@ -1,6 +1,6 @@
 from django import forms
 
-from core.models import Evento, Mentoria, Pessoa, Projeto
+from core.models import Evento, Mentoria, PedidoMentoria, Pessoa, Projeto
 
 
 class BootstrapFormMixin:
@@ -24,9 +24,12 @@ class BootstrapFormMixin:
 class EventoForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Evento
-        fields = ["nome", "tipo", "data", "local", "parceiro", "edicao"]
+        fields = ["nome", "tipo", "data", "local", "ponto_encontro", "vagas", "inscricoes_inicio", "inscricoes_fim",
+                  "publicado", "descricao", "parceiro", "edicao", "observacoes"]
         widgets = {
-            "data": forms.DateInput(attrs={"type": "date"}),
+            "data": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "inscricoes_inicio": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "inscricoes_fim": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
         }
 
 
@@ -40,16 +43,53 @@ class MentoriaForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = Mentoria
-        fields = ["tipo", "edicao", "projeto", "data", "duracao_minutos", "tema", "observacoes", "mentorados"]
+        fields = ["tipo", "pedido", "edicao", "projeto", "data", "horario", "duracao_minutos", "responsavel",
+                  "tema", "orientacao", "encaminhamentos", "observacoes", "mentorados"]
         widgets = {
-            "data": forms.DateInput(attrs={"type": "date"}),
+            "data": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "horario": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["pedido"].queryset = PedidoMentoria.objects.select_related("pessoa").exclude(
+            status__in=["realizado", "nao_realizado"]).order_by("-data_pedido")
+        self.fields["pedido"].help_text = "Pedidos ainda em aberto. Ao registrar a sessão, o pedido vira 'Realizado'."
+        self.fields["data"].required = True
 
     def save(self, commit=True):
         mentoria = super().save(commit=commit)
         if commit:
             mentoria.mentorados.set(self.cleaned_data["mentorados"])
+            pedido = mentoria.pedido
+            if pedido and pedido.status != "realizado":
+                pedido.status = "realizado"
+                pedido.save(update_fields=["status", "atualizado_em"])
         return mentoria
+
+
+class PedidoAtendimentoForm(BootstrapFormMixin, forms.ModelForm):
+    """Campos que a equipe atualiza ao acompanhar um pedido de mentoria."""
+
+    class Meta:
+        model = PedidoMentoria
+        fields = ["status", "responsavel", "projeto", "observacao_interna"]
+
+
+class PedidoBuscaForm(forms.Form):
+    q = forms.CharField(required=False, label="Buscar por nome, projeto ou temática")
+    status = forms.ChoiceField(required=False, choices=[("", "Todos os status")] + PedidoMentoria.STATUS_CHOICES)
+    origem = forms.ChoiceField(required=False, choices=[("", "Todas as origens")] + PedidoMentoria.ORIGEM_CHOICES)
+    ano = forms.TypedChoiceField(required=False, coerce=int, empty_value=None, choices=[])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        anos = PedidoMentoria.objects.order_by("-ano").values_list("ano", flat=True).distinct()
+        self.fields["ano"].choices = [("", "Todos os anos")] + [(a, a) for a in anos]
+        for campo in self.fields.values():
+            campo.widget.attrs.setdefault(
+                "class", "form-select" if isinstance(campo.widget, forms.Select) else "form-control"
+            )
 
 
 class PessoaQuickForm(BootstrapFormMixin, forms.ModelForm):

@@ -1,6 +1,14 @@
 """
 Modelos do FACE Metrics.
 
+Novembro/2026 — evolução para receber a base consolidada das planilhas:
+    + PedidoMentoria  (o pedido feito no formulário, com status de atendimento)
+    + Mentoria        passa a ser a SESSÃO realizada, ligada ao pedido
+    + PerfilMentor    (mentores voluntários / parceiros)
+    + Evento          ganha o tipo "viagem", vagas e período de inscrição;
+                      EventoParticipante ganha status da inscrição (a presença continua em `presente`)
+    + campos novos em Pessoa, Projeto, Edição e Participação
+
 Desenho geral:
     Programa (catálogo fixo: Spark, Start, Internacionalização, CRIE Games,
               Power Girl, TCC Connect, Mentoria em Empreendedorismo, Sebrae Aqui...)
@@ -16,9 +24,27 @@ Desenho geral:
     (ex.: nasce no Spark e depois entra no Start).
 """
 
+from datetime import date
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
-from django.core.validators import RegexValidator
+
+
+def validar_cpf(valor):
+    """CPF com 11 dígitos e dígitos verificadores corretos."""
+    if not valor:
+        return
+    if len(valor) != 11 or not valor.isdigit() or len(set(valor)) == 1:
+        raise ValidationError("CPF inválido: informe 11 dígitos, sem pontuação.")
+    for n in (9, 10):
+        soma = sum(int(valor[i]) * (n + 1 - i) for i in range(n))
+        if (soma * 10) % 11 % 10 != int(valor[n]):
+            raise ValidationError("CPF inválido: dígito verificador não confere.")
+
+
+TRL_VALIDADORES = [MinValueValidator(1), MaxValueValidator(9)]
 
 
 class TimeStampedModel(models.Model):
@@ -84,6 +110,7 @@ class Programa(TimeStampedModel):
         ("inovacao_aberta", "Inovação aberta"),
         ("evento_capacitacao", "Evento / Capacitação"),
         ("atendimento", "Atendimento (ex.: Sebrae Aqui)"),
+        ("iniciacao", "Iniciação ao empreendedorismo (ex.: PIEMP)"),
     ]
 
     nome = models.CharField(max_length=150, unique=True)
@@ -129,6 +156,12 @@ class Edicao(TimeStampedModel):
     vagas = models.PositiveIntegerField(null=True, blank=True)
     observacoes = models.TextField(blank=True)
 
+    # vitrine pública (portal externo)
+    inscricoes_inicio = models.DateField("início das inscrições", null=True, blank=True)
+    inscricoes_fim = models.DateField("fim das inscrições", null=True, blank=True)
+    descricao_publica = models.TextField(blank=True, help_text="Texto exibido na vitrine pública.")
+    publicada = models.BooleanField("publicada na vitrine", default=False)
+
     class Meta:
         ordering = ["-ano", "-semestre"]
         unique_together = ("programa", "ano", "semestre")
@@ -138,6 +171,12 @@ class Edicao(TimeStampedModel):
     def __str__(self):
         periodo = f"{self.ano}.{self.semestre}" if self.semestre else str(self.ano)
         return f"{self.programa.nome} - {periodo}"
+
+    @property
+    def inscricoes_abertas(self):
+        hoje = date.today()
+        return bool(self.inscricoes_inicio and self.inscricoes_fim
+                    and self.inscricoes_inicio <= hoje <= self.inscricoes_fim)
 
 
 # ---------------------------------------------------------------------------
@@ -163,21 +202,21 @@ class Pessoa(TimeStampedModel):
         ("mentor_parceiro", "Mentor parceiro"),
     ]
 
-    cpf_validator = RegexValidator(
-        regex=r"^\d{11}$",
-        message="CPF deve conter 11 dígitos numéricos (sem pontuação).",
-    )
-
     nome = models.CharField(max_length=200)
     cpf = models.CharField(
-        max_length=11, validators=[cpf_validator],
+        "CPF", max_length=11, validators=[validar_cpf],
         blank=True, null=True, unique=True,
-        help_text="Somente números. Campo sensível — tratar com cuidado (LGPD).",
+        help_text="Somente números. Obrigatório nos cadastros novos (pedido desde meados de 2025). "
+                  "Campo sensível — tratar com cuidado (LGPD).",
     )
     rg = models.CharField(max_length=20, blank=True, help_text="Campo sensível — tratar com cuidado (LGPD).")
     email = models.EmailField(blank=True)
-    telefone = models.CharField(max_length=20, blank=True)
-    tipo_pessoa = models.CharField(max_length=25, choices=TIPO_CHOICES)
+    emails_alternativos = models.TextField("outros e-mails", blank=True,
+                                           help_text="E-mails usados em outros formulários, separados por vírgula.")
+    telefone = models.CharField(max_length=20, blank=True, help_text="Formato +55DDNNNNNNNNN.")
+    tipo_pessoa = models.CharField("vínculo atual", max_length=25, choices=TIPO_CHOICES, blank=True,
+                                   help_text="O vínculo muda com o tempo; o de cada inscrição fica na inscrição.")
+    data_nascimento = models.DateField(null=True, blank=True)
 
     curso = models.ForeignKey(
         Curso, on_delete=models.SET_NULL, null=True, blank=True, related_name="pessoas",
@@ -185,8 +224,18 @@ class Pessoa(TimeStampedModel):
     )
     ra = models.CharField("RA", max_length=20, blank=True)
     semestre_ingresso = models.CharField(max_length=10, blank=True, help_text="Ex.: 2023.1")
+    ano_formacao = models.PositiveSmallIntegerField("ano de formação", null=True, blank=True,
+                                                    help_text="Para ex-alunos.")
 
     cidade = models.CharField(max_length=100, blank=True)
+    estado = models.CharField(max_length=2, blank=True)
+    cep = models.CharField("CEP", max_length=9, blank=True)
+    cnpj = models.CharField("CNPJ", max_length=14, blank=True, help_text="Empresa da pessoa, se informada.")
+    observacoes = models.TextField("observações", blank=True)
+    codigo_importacao = models.CharField(
+        "código na base consolidada", max_length=12, blank=True, db_index=True,
+        help_text="ID gerado pela consolidação das planilhas (ex.: P0001). Só para rastrear a origem.",
+    )
 
     consentimento_lgpd = models.BooleanField(
         default=False,
@@ -208,6 +257,8 @@ class Participacao(TimeStampedModel):
 
     PAPEL_CHOICES = [
         ("participante", "Participante"),
+        ("lider", "Líder do grupo"),
+        ("integrante", "Integrante do grupo"),
         ("mentor", "Mentor(a)"),
         ("mentorado", "Mentorado(a)"),
         ("organizador", "Organizador(a)"),
@@ -216,7 +267,10 @@ class Participacao(TimeStampedModel):
 
     STATUS_CHOICES = [
         ("inscrito", "Inscrito(a)"),
+        ("lista_espera", "Lista de espera"),
         ("em_andamento", "Em andamento"),
+        ("participou", "Participou"),
+        ("nao_participou", "Não participou"),
         ("concluido", "Concluído"),
         ("desistente", "Desistente"),
     ]
@@ -225,8 +279,16 @@ class Participacao(TimeStampedModel):
     edicao = models.ForeignKey(Edicao, on_delete=models.CASCADE, related_name="participacoes")
     papel = models.CharField(max_length=20, choices=PAPEL_CHOICES, default="participante")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="inscrito")
-    data_entrada = models.DateField(null=True, blank=True)
+    data_entrada = models.DateField("data de inscrição", null=True, blank=True)
     data_saida = models.DateField(null=True, blank=True)
+    projeto = models.ForeignKey("Projeto", on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name="participacoes")
+    vinculo_na_inscricao = models.CharField(max_length=25, choices=Pessoa.TIPO_CHOICES, blank=True,
+                                            help_text="Vínculo declarado no momento da inscrição.")
+    curso_na_inscricao = models.ForeignKey(Curso, on_delete=models.SET_NULL, null=True, blank=True,
+                                           related_name="+")
+    detalhes = models.TextField(blank=True)
+    origem = models.CharField(max_length=250, blank=True, help_text="Planilha/linha de onde veio o registro.")
 
     class Meta:
         unique_together = ("pessoa", "edicao", "papel")
@@ -278,6 +340,24 @@ class Projeto(TimeStampedModel):
         help_text="Preencher quando o projeto for um desafio proposto por uma empresa parceira (ex.: TCC Connect).",
     )
 
+    STATUS_CHOICES = [
+        ("ativo", "Ativo"),
+        ("concluido", "Concluído"),
+        ("desistiu", "Desistiu / encerrado"),
+    ]
+
+    desafio_atual = models.TextField(blank=True)
+    trl_inicial = models.PositiveSmallIntegerField("TRL inicial", null=True, blank=True, validators=TRL_VALIDADORES)
+    trl_atual = models.PositiveSmallIntegerField("TRL atual", null=True, blank=True, validators=TRL_VALIDADORES)
+    ods = models.CharField("ODS", max_length=200, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ativo")
+    origens = models.CharField(max_length=300, blank=True,
+                               help_text="Onde o projeto apareceu (mentoria, PIEMP, TCC Connect...).")
+    link_entrega = models.CharField(max_length=500, blank=True)
+    mentor_cientifico = models.CharField("mentor científico", max_length=200, blank=True)
+    observacoes = models.TextField("observações", blank=True)
+    codigo_importacao = models.CharField("código na base consolidada", max_length=12, blank=True, db_index=True)
+
     class Meta:
         ordering = ["nome"]
         verbose_name = "Projeto"
@@ -292,6 +372,9 @@ class ProjetoParticipante(TimeStampedModel):
 
     PAPEL_CHOICES = [
         ("fundador", "Fundador(a)"),
+        ("responsavel", "Responsável"),
+        ("lider", "Líder"),
+        ("integrante", "Integrante"),
         ("colaborador", "Colaborador(a)"),
     ]
 
@@ -312,8 +395,100 @@ class ProjetoParticipante(TimeStampedModel):
 # Mentorias e eventos
 # ---------------------------------------------------------------------------
 
+class PerfilMentor(TimeStampedModel):
+    """Dados de mentor de uma Pessoa (voluntário, parceiro, docente)."""
+
+    pessoa = models.OneToOneField(Pessoa, on_delete=models.CASCADE, related_name="perfil_mentor")
+    organizacao = models.CharField("organização", max_length=200, blank=True)
+    areas = models.CharField("áreas de mentoria", max_length=300, blank=True)
+    bio = models.TextField(blank=True)
+    ativo = models.BooleanField(default=True)
+    exibir_na_vitrine = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["pessoa__nome"]
+        verbose_name = "Mentor"
+        verbose_name_plural = "Mentores"
+
+    def __str__(self):
+        return self.pessoa.nome
+
+
+class PedidoMentoria(TimeStampedModel):
+    """
+    O pedido de mentoria feito no formulário (Programa de Mentorias, Extensão ou,
+    no futuro, o portal público). As sessões realizadas ficam em Mentoria, ligadas ao pedido.
+    """
+
+    ORIGEM_CHOICES = [
+        ("programa_mentorias", "Programa de Mentorias"),
+        ("extensao", "Extensão"),
+        ("portal", "Portal público"),
+    ]
+    STATUS_CHOICES = [
+        ("aguardando", "Aguardando triagem"),
+        ("para_agendar", "Para agendar"),
+        ("agendado", "Agendado"),
+        ("para_reagendar", "Para reagendar"),
+        ("realizado", "Realizado"),
+        ("nao_realizado", "Não realizado"),
+        ("nao_respondeu", "Não respondeu"),
+        ("sem_registro", "Sem registro"),
+    ]
+    FORMATO_CHOICES = [("online", "Online"), ("presencial", "Presencial")]
+    PERIODO_CHOICES = [("manha", "Manhã"), ("almoco", "Almoço"), ("tarde", "Tarde"), ("noite", "Noite"),
+                       ("outro", "Outro horário")]
+
+    pessoa = models.ForeignKey(Pessoa, on_delete=models.CASCADE, related_name="pedidos_mentoria")
+    projeto = models.ForeignKey("Projeto", on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name="pedidos_mentoria")
+    data_pedido = models.DateField("data do pedido", null=True, blank=True)
+    ano = models.PositiveSmallIntegerField(db_index=True)
+    origem = models.CharField(max_length=25, choices=ORIGEM_CHOICES, default="programa_mentorias")
+    turma_extensao = models.CharField("turma da extensão", max_length=100, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="aguardando", db_index=True)
+    status_detalhe = models.CharField("detalhe do status", max_length=100, blank=True,
+                                      help_text='Ex.: "sem sessão registrada" quando a planilha marcou realizado.')
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name="pedidos_mentoria",
+                                    help_text="Quem da equipe cuida do pedido.")
+
+    # o que a pessoa respondeu
+    vinculo_no_pedido = models.CharField("vínculo no pedido", max_length=25, choices=Pessoa.TIPO_CHOICES, blank=True)
+    curso_no_pedido = models.ForeignKey(Curso, verbose_name="curso no pedido", on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name="+")
+    nome_projeto_informado = models.CharField("nome do projeto (resposta)", max_length=300, blank=True)
+    tematica = models.TextField("temática", blank=True)
+    desafio = models.TextField(blank=True)
+    projeto_facens = models.CharField("ligado a projeto Facens", max_length=200, blank=True)
+    projeto_facens_texto = models.TextField("ligado a projeto Facens (resposta)", blank=True)
+    trl = models.PositiveSmallIntegerField("TRL", null=True, blank=True, validators=TRL_VALIDADORES)
+    formato = models.CharField(max_length=15, choices=FORMATO_CHOICES, blank=True)
+    periodo = models.CharField("período preferido", max_length=10, choices=PERIODO_CHOICES, blank=True)
+    horario_alternativo = models.CharField("horário alternativo", max_length=300, blank=True)
+    como_soube = models.CharField("como soube", max_length=200, blank=True)
+    como_soube_texto = models.TextField("como soube (resposta)", blank=True)
+    observacao = models.TextField("observação", blank=True)
+    anexo = models.CharField(max_length=500, blank=True)
+    observacao_interna = models.TextField("observação interna", blank=True,
+                                          help_text="Anotações da equipe (não visíveis ao solicitante).")
+
+    origem_registro = models.CharField("origem do registro", max_length=250, blank=True,
+                                       help_text="Planilha/linha de onde veio.")
+    codigo_importacao = models.CharField("código na base consolidada", max_length=12, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ["-data_pedido", "-ano"]
+        verbose_name = "Pedido de mentoria"
+        verbose_name_plural = "Pedidos de mentoria"
+
+    def __str__(self):
+        quando = f"{self.data_pedido:%d/%m/%Y}" if self.data_pedido else str(self.ano)
+        return f"Pedido de {self.pessoa.nome} ({quando})"
+
+
 class Mentoria(TimeStampedModel):
-    """Registro de uma sessão de mentoria."""
+    """Registro de uma SESSÃO de mentoria realizada (ligada ao pedido, quando houver)."""
 
     TIPO_CHOICES = [
         ("diagnostico", "Diagnóstico (triagem inicial)"),
@@ -334,18 +509,31 @@ class Mentoria(TimeStampedModel):
     projeto = models.ForeignKey(
         Projeto, on_delete=models.SET_NULL, null=True, blank=True, related_name="mentorias",
     )
-    data = models.DateField()
-    duracao_minutos = models.PositiveIntegerField(default=60)
+    pedido = models.ForeignKey(PedidoMentoria, on_delete=models.SET_NULL, null=True, blank=True,
+                               related_name="sessoes")
+    data = models.DateField(null=True)
+    horario = models.TimeField("horário", null=True, blank=True)
+    duracao_minutos = models.PositiveIntegerField("duração (min)", default=60, null=True, blank=True)
     tema = models.CharField(max_length=200, blank=True)
-    observacoes = models.TextField(blank=True)
+    observacoes = models.TextField("observações", blank=True)
+    responsavel = models.CharField("responsável (equipe)", max_length=60, blank=True,
+                                   help_text="Iniciais de quem conduziu (ex.: VH).")
+    area = models.CharField("área", max_length=150, blank=True)
+    orientacao = models.TextField("orientação / próximos passos", blank=True)
+    encaminhamentos = models.CharField(max_length=300, blank=True,
+                                       help_text="Programas para onde a pessoa foi encaminhada (WF, Spark...).")
+    origem_registro = models.CharField("origem do registro", max_length=250, blank=True)
+    codigo_importacao = models.CharField("código na base consolidada", max_length=12, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-data"]
-        verbose_name = "Mentoria"
-        verbose_name_plural = "Mentorias"
+        verbose_name = "Mentoria (sessão)"
+        verbose_name_plural = "Mentorias (sessões)"
 
     def __str__(self):
-        return f"Mentoria de {self.mentor.nome} em {self.data:%d/%m/%Y}"
+        quando = f"{self.data:%d/%m/%Y}" if self.data else "sem data"
+        quem = self.mentor.nome if self.mentor_id else (self.responsavel or "equipe FACE")
+        return f"Mentoria com {quem} em {quando}"
 
 
 class Entrega(TimeStampedModel):
@@ -394,6 +582,7 @@ class Evento(TimeStampedModel):
     """Visitas técnicas, palestras, workshops, feiras etc."""
 
     TIPO_CHOICES = [
+        ("viagem", "Viagem / missão"),
         ("visita_tecnica", "Visita técnica"),
         ("palestra", "Palestra"),
         ("workshop", "Workshop/Oficina"),
@@ -403,8 +592,15 @@ class Evento(TimeStampedModel):
 
     nome = models.CharField(max_length=200)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
-    data = models.DateField()
+    data = models.DateField(null=True, help_text="Data do evento/viagem.")
     local = models.CharField(max_length=200, blank=True)
+    descricao = models.TextField("descrição", blank=True, help_text="Texto exibido na vitrine pública.")
+    vagas = models.PositiveIntegerField(null=True, blank=True)
+    inscricoes_inicio = models.DateField("início das inscrições", null=True, blank=True)
+    inscricoes_fim = models.DateField("fim das inscrições", null=True, blank=True)
+    publicado = models.BooleanField("publicado na vitrine", default=False)
+    ponto_encontro = models.CharField("ponto de encontro / embarque", max_length=200, blank=True)
+    observacoes = models.TextField("observações", blank=True)
     parceiro = models.ForeignKey(
         Parceiro, on_delete=models.SET_NULL, null=True, blank=True, related_name="eventos",
     )
@@ -421,7 +617,13 @@ class Evento(TimeStampedModel):
         verbose_name_plural = "Eventos"
 
     def __str__(self):
-        return f"{self.nome} ({self.data:%d/%m/%Y})"
+        return f"{self.nome} ({self.data:%d/%m/%Y})" if self.data else self.nome
+
+    @property
+    def inscricoes_abertas(self):
+        hoje = date.today()
+        return bool(self.inscricoes_inicio and self.inscricoes_fim
+                    and self.inscricoes_inicio <= hoje <= self.inscricoes_fim)
 
 
 class EventoParticipante(TimeStampedModel):
@@ -430,12 +632,26 @@ class EventoParticipante(TimeStampedModel):
     da inscrição — útil pra medir taxa de comparecimento real por evento.
     """
 
+    STATUS_CHOICES = [
+        ("inscrito", "Inscrito(a)"),
+        ("lista_espera", "Lista de espera"),
+        ("confirmado", "Confirmado(a)"),
+        ("cancelado", "Cancelou"),
+    ]
+
     evento = models.ForeignKey(Evento, on_delete=models.CASCADE, related_name="inscricoes")
     pessoa = models.ForeignKey(Pessoa, on_delete=models.CASCADE, related_name="inscricoes_eventos")
+    status = models.CharField("situação da inscrição", max_length=15, choices=STATUS_CHOICES, default="inscrito")
     presente = models.BooleanField(
         null=True, blank=True,
         help_text="Deixe em branco até confirmar. True = compareceu, False = não compareceu.",
     )
+    data_inscricao = models.DateField(null=True, blank=True)
+    vinculo_na_inscricao = models.CharField(max_length=25, choices=Pessoa.TIPO_CHOICES, blank=True)
+    curso_na_inscricao = models.ForeignKey(Curso, on_delete=models.SET_NULL, null=True, blank=True,
+                                           related_name="+")
+    detalhes = models.TextField(blank=True)
+    origem = models.CharField(max_length=250, blank=True, help_text="Planilha/linha de onde veio o registro.")
 
     class Meta:
         unique_together = ("evento", "pessoa")

@@ -4,18 +4,38 @@ Plataforma de gestão de métricas do FACE — Centro de Empreendedorismo da Uni
 
 ## O que já está pronto
 
-- Modelo de dados (`core/models.py`) cobrindo:
-  - **Programa** (catálogo fixo: Spark, Start, Internacionalização, CRIE Games,
-    Power Girl, TCC Connect, Mentoria, Sebrae Aqui)
-  - **Edição** (instância anual/semestral de um Programa — é aqui que entram
-    os filtros por ano/semestre para os dashboards)
-  - **Pessoa** (aluno, ex-aluno, comunidade externa, docente, colaborador, mentor parceiro)
-  - **Participação** (liga Pessoa a uma Edição, com papel e status)
-  - **Projeto** (pode atravessar várias Edições) e seus integrantes
-  - **Mentoria** e **Evento** (visitas técnicas, palestras etc.)
-  - **Parceiro** e **Curso** como catálogos de apoio
-- Django Admin já configurado com filtros, busca e inlines úteis
-- Comando `seed_programas` para popular o catálogo fixo de Programas
+- Modelo de dados (`core/models.py`):
+  - **Programa** (catálogo fixo) → **Edição** (ex.: TCC Connect 2025.1) → **Participação**
+    (papel: participante, líder, integrante...; status: inscrito, participou, concluído, desistente...)
+  - **Pessoa**: cadastro único. CPF validado (dígitos verificadores) e único; vínculo atual + vínculo de
+    cada inscrição/pedido (o vínculo muda com o tempo)
+  - **Pedido de mentoria**: o pedido do formulário, com status de atendimento (para agendar, agendado,
+    realizado, não respondeu...)
+  - **Mentoria**: a SESSÃO realizada, ligada ao pedido (1ª sessão = diagnóstico), com orientação e
+    encaminhamentos (WF, Spark, Start...)
+  - **Evento**: viagens/missões, palestras, visitas técnicas — com inscrição, status e presença
+  - **Projeto** (TRL inicial/atual, status, empresa parceira) e integrantes; **Mentor** (perfil)
+- **Portal da equipe** (`/portal/`): pedidos de mentoria (filtros, status, responsável), sessões,
+  pessoas, projetos, viagens e eventos (com marcação de presença)
+- **Dashboard** (`/dashboard/`): todos os números respeitam o filtro de ano
+- **Admin** (`/admin/`) para manutenção
+- Carga das planilhas: `consolidacao/` (fora deste app) gera a base consolidada e o comando
+  `carregar_base_consolidada` a coloca no banco (com simulação, backup e desfazer)
+
+## Carregar os dados das planilhas
+
+```powershell
+# 1. consolidar as planilhas (gera dados\saida\base_consolidada_face.json)
+python -X utf8 consolidacao\consolidar.py dados\planilhas --saida dados\saida --base-antiga dados\face_dados.json
+# 2. simular a carga (não altera nada)
+python -X utf8 manage.py carregar_base_consolidada dados\saida\base_consolidada_face.json
+# 3. carregar de verdade (faz backup em backups\ antes)
+python -X utf8 manage.py carregar_base_consolidada dados\saida\base_consolidada_face.json --confirmar
+# desfazer: volta ao backup indicado no fim da carga
+python -X utf8 manage.py carregar_base_consolidada --restaurar backups\antes_da_carga_....json --confirmar
+```
+
+Testes: `python manage.py test core`
 
 ## Setup local
 
@@ -28,7 +48,6 @@ pip install -r requirements.txt
 cp .env.example .env
 # edite o .env com as credenciais do seu Postgres local
 
-python manage.py makemigrations core
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py seed_programas   # popula Spark, Start, Power Girl etc.

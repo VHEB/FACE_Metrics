@@ -20,6 +20,9 @@ urlpatterns = [
     path("mentorias/nova/", views.mentoria_create, name="mentoria_create"),
     path("mentorias/<int:pk>/", views.mentoria_detail, name="mentoria_detail"),
 
+    path("pedidos/", views.pedido_list, name="pedido_list"),
+    path("pedidos/<int:pk>/", views.pedido_detail, name="pedido_detail"),
+
     path("pessoas/", views.pessoa_list, name="pessoa_list"),
     path("pessoas/nova/", views.pessoa_create, name="pessoa_create"),
     path("pessoas/<int:pk>/", views.pessoa_detail, name="pessoa_detail"),

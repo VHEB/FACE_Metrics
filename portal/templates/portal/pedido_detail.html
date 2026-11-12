@@ -1,0 +1,78 @@
+{% extends "portal/base.html" %}
+{% block titulo %}Pedido de {{ pedido.pessoa.nome }} — Portal FACE{% endblock %}
+{% block conteudo %}
+<div class="row g-3">
+<div class="col-lg-8">
+    <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h4 class="mb-1">Pedido de mentoria</h4>
+                <div class="text-muted">
+                    <a href="{% url 'portal:pessoa_detail' pedido.pessoa.pk %}">{{ pedido.pessoa.nome }}</a>
+                    · {{ pedido.data_pedido|date:"d/m/Y"|default:pedido.ano }} · {{ pedido.get_origem_display }}
+                    {% if pedido.turma_extensao %}({{ pedido.turma_extensao }}){% endif %}
+                </div>
+            </div>
+            <div>{% include "portal/_status_pedido.html" %}</div>
+        </div>
+        <dl class="row mt-3 mb-0">
+            <dt class="col-sm-4">Projeto</dt>
+            <dd class="col-sm-8">{% if pedido.projeto %}<a href="{% url 'portal:projeto_detail' pedido.projeto.pk %}">{{ pedido.projeto.nome }}</a>{% else %}{{ pedido.nome_projeto_informado|default:"—" }}{% endif %}</dd>
+            <dt class="col-sm-4">Vínculo / curso no pedido</dt>
+            <dd class="col-sm-8">{{ pedido.get_vinculo_no_pedido_display|default:"—" }}{% if pedido.curso_no_pedido %} · {{ pedido.curso_no_pedido.nome }}{% endif %}</dd>
+            <dt class="col-sm-4">Temática</dt><dd class="col-sm-8" style="white-space: pre-line;">{{ pedido.tematica|default:"—" }}</dd>
+            <dt class="col-sm-4">Desafio atual</dt><dd class="col-sm-8" style="white-space: pre-line;">{{ pedido.desafio|default:"—" }}</dd>
+            <dt class="col-sm-4">TRL</dt><dd class="col-sm-8">{{ pedido.trl|default:"—" }}</dd>
+            <dt class="col-sm-4">Ligado a projeto Facens</dt><dd class="col-sm-8">{{ pedido.projeto_facens|default:"—" }}</dd>
+            <dt class="col-sm-4">Formato / período</dt>
+            <dd class="col-sm-8">{{ pedido.get_formato_display|default:"—" }} · {{ pedido.get_periodo_display|default:"—" }}{% if pedido.horario_alternativo %}<div class="small text-muted">{{ pedido.horario_alternativo }}</div>{% endif %}</dd>
+            <dt class="col-sm-4">Como soube</dt><dd class="col-sm-8">{{ pedido.como_soube|default:"—" }}</dd>
+            {% if pedido.observacao %}<dt class="col-sm-4">Observação</dt><dd class="col-sm-8" style="white-space: pre-line;">{{ pedido.observacao }}</dd>{% endif %}
+            {% if pedido.anexo %}<dt class="col-sm-4">Anexo</dt><dd class="col-sm-8"><a href="{{ pedido.anexo }}" target="_blank" rel="noopener">abrir</a></dd>{% endif %}
+        </dl>
+    </div>
+
+    <div class="card p-3 mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Sessões realizadas</h6>
+            <a href="{% url 'portal:mentoria_create' %}?pedido={{ pedido.pk }}" class="btn btn-sm btn-primary">+ Registrar sessão</a>
+        </div>
+        {% for s in sessoes %}
+            <div class="border-bottom py-2">
+                <a href="{% url 'portal:mentoria_detail' s.pk %}">{{ s.data|date:"d/m/Y"|default:"sem data" }} — {{ s.get_tipo_display }}</a>
+                {% if s.responsavel %}<span class="text-muted small">· {{ s.responsavel }}</span>{% endif %}
+                {% if s.encaminhamentos %}<div class="small">Encaminhado para: {{ s.encaminhamentos }}</div>{% endif %}
+            </div>
+        {% empty %}
+            <div class="text-muted small">Nenhuma sessão registrada para este pedido.</div>
+        {% endfor %}
+    </div>
+</div>
+<div class="col-lg-4">
+    <div class="card p-3">
+        <h6>Atendimento</h6>
+        <form method="post">{% csrf_token %}
+            {% for campo in form %}
+                <div class="mb-2"><label class="form-label small mb-1">{{ campo.label }}</label>{{ campo }}{% for e in campo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+            {% endfor %}
+            <button class="btn btn-primary w-100">Salvar</button>
+        </form>
+    </div>
+    <div class="card p-3 mt-3">
+        <h6>Contato</h6>
+        <div class="small">{{ pedido.pessoa.email|default:"sem e-mail" }}</div>
+        <div class="small">{{ pedido.pessoa.telefone|default:"sem telefone" }}</div>
+    </div>
+    {% if outros_pedidos %}
+    <div class="card p-3 mt-3">
+        <h6>Outros pedidos desta pessoa</h6>
+        {% for o in outros_pedidos %}
+            <div class="small border-bottom py-1"><a href="{% url 'portal:pedido_detail' o.pk %}">{{ o.data_pedido|date:"d/m/Y"|default:o.ano }}</a> · {{ o.get_status_display }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if pedido.origem_registro %}<div class="text-muted small mt-2">Origem: {{ pedido.origem_registro }}</div>{% endif %}
+</div>
+</div>
+<a href="{% url 'portal:pedido_list' %}" class="btn btn-link px-0 mt-3">← Voltar</a>
+{% endblock %}
